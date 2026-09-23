@@ -90,7 +90,9 @@ class PostingService:
         post_id: Optional[int],
         status: str,
         reason: Optional[str] = None,
-        telegram_message_id: Optional[str] = None
+        telegram_message_id: Optional[str] = None,
+        skip_reason: Optional[str] = None,
+        posted_at: Optional[datetime] = None,
     ) -> PostHistory:
         """Record a posting attempt"""
         history = PostHistory(
@@ -98,9 +100,9 @@ class PostingService:
             group_id=group_id,
             post_id=post_id,
             status=status,
-            reason=reason,
+            reason=reason or skip_reason,
             telegram_message_id=telegram_message_id,
-            posted_at=datetime.utcnow() if status == "success" else None,
+            posted_at=posted_at or (datetime.utcnow() if status == "success" else None),
             created_at=datetime.utcnow()
         )
         
@@ -117,10 +119,10 @@ class PostingService:
         return True
     
     @staticmethod
-    def record_rate_limit_error(db: Session, user_id: int, wait_seconds: int):
+    def record_rate_limit_error(db: Session, user_id: int, wait_seconds: int, group_id: Optional[int] = None):
         """Record rate limit error and backoff"""
         logger.warning(f"Rate limited for user {user_id}: wait {wait_seconds}s")
-        # TODO: Store rate limit state
+        return {"user_id": user_id, "group_id": group_id, "wait_seconds": wait_seconds}
 
 
 class ReplyService:
@@ -169,15 +171,20 @@ class SchedulerService:
         from app.models import SchedulerSettings
         import pytz
         
-        if current_time is None:
-            current_time = datetime.utcnow()
-        
         settings = db.query(SchedulerSettings).filter(
             SchedulerSettings.user_id == user_id
         ).first()
         
         if not settings or settings.posting_mode != "automatic":
             return False
+
+        if current_time is None:
+            current_time = datetime.utcnow()
+        if settings.timezone and settings.timezone != "UTC":
+            try:
+                current_time = pytz.utc.localize(current_time).astimezone(pytz.timezone(settings.timezone))
+            except pytz.UnknownTimeZoneError:
+                logger.warning("Unknown scheduler timezone %s; using UTC", settings.timezone)
         
         # Parse active times
         start_hour, start_min = map(int, settings.active_start_time.split(":"))
@@ -197,7 +204,9 @@ class SchedulerService:
         start_total_min = start_hour * 60 + start_min
         end_total_min = end_hour * 60 + end_min
         
-        return start_total_min <= current_total_min <= end_total_min
+        if start_total_min <= end_total_min:
+            return start_total_min <= current_total_min <= end_total_min
+        return current_total_min >= start_total_min or current_total_min <= end_total_min
     
     @staticmethod
     def get_next_group_in_feed(

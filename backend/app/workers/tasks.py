@@ -1,7 +1,7 @@
 """
 Celery tasks module
 """
-from app.workers.celery_app import (
+from app.workers.implementations import (
     analyze_group_task,
     post_to_group_task,
     monitor_replies_task,

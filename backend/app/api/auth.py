@@ -105,14 +105,12 @@ async def get_current_user(current_user: User = Depends(get_current_user)):
     """Get current user info"""
     return current_user
 
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
+def get_current_user(credentials = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
     """Get current authenticated user"""
-    from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-    
-    if not token:
+    if not credentials:
         raise HTTPException(status_code=401, detail="Not authenticated")
     
-    payload = verify_token(token)
+    payload = verify_token(credentials.credentials)
     if not payload:
         raise HTTPException(status_code=401, detail="Invalid token")
     

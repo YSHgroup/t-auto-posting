@@ -194,6 +194,7 @@ class TelegramService:
                     "from_user_name": msg.from_user.username if msg.from_user else None,
                     "from_user_first_name": msg.from_user.first_name if msg.from_user else None,
                     "date": int(msg.date.timestamp()) if msg.date else None,
+                    "reply_to_message_id": msg.reply_to_message_id,
                     "has_media": msg.media is not None,
                 })
             

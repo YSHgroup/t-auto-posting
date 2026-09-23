@@ -157,6 +157,10 @@ class APIClient {
     return this.client.post(`/posts/${postId}/duplicate`)
   }
 
+  async sendPost(postId: number, groupId: number) {
+    return this.client.post(`/posts/${postId}/send`, { group_id: groupId })
+  }
+
   // Scheduler endpoints
   async getSchedulerConfig() {
     return this.client.get('/scheduler/config')
@@ -181,6 +185,10 @@ class APIClient {
   // Notification endpoints
   async getNotifications(unreadOnly: boolean = false) {
     return this.client.get('/notifications', { params: { unread_only: unreadOnly } })
+  }
+
+  async getFeedRecommendations(feedItemId: number) {
+    return this.client.get(`/feed/${feedItemId}/recommendations`)
   }
 
   async getUnreadCount() {

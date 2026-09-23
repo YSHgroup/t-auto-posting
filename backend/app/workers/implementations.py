@@ -45,7 +45,7 @@ def analyze_group_task(self, user_id: int, group_id: int):
         # Get group from database
         group = db.query(TelegramGroup).filter(
             TelegramGroup.id == group_id,
-            TelegramGroup.user_id == user_id
+            TelegramGroup.users.any(id=user_id)
         ).first()
         
         if not group:
@@ -150,7 +150,7 @@ def post_to_group_task(self, user_id: int, group_id: int, post_id: int):
     Post a message to a Telegram group with retry logic for FloodWait
     """
     from app.core.database import SessionLocal
-    from app.models import Post, TelegramAccount, PostHistory
+    from app.models import Post, TelegramGroup, TelegramAccount, PostHistory
     from app.services.business import PostingService, GroupService
     from app.telegram.client import get_telegram_service
     from pyrogram.errors import FloodWait
@@ -163,8 +163,9 @@ def post_to_group_task(self, user_id: int, group_id: int, post_id: int):
             Post.id == post_id,
             Post.user_id == user_id
         ).first()
+        group = db.query(TelegramGroup).filter(TelegramGroup.id == group_id).first()
         
-        if not post or not post.is_active:
+        if not post or not post.is_active or not group:
             logger.error(f"Post {post_id} not found or inactive")
             return {"status": "error", "message": "Post not found"}
         
@@ -196,7 +197,7 @@ def post_to_group_task(self, user_id: int, group_id: int, post_id: int):
         # Send message
         telegram_service = get_telegram_service(telegram_account.session_string)
         message_id = _run_async_task(
-            telegram_service.send_message(group_id, post.content)
+            telegram_service.send_message(group.telegram_group_id, post.content)
         )
         
         if not message_id:
@@ -282,7 +283,7 @@ def monitor_replies_task(self, user_id: int):
             try:
                 messages = _run_async_task(
                     telegram_service.get_recent_messages(
-                        post_history.group_id,
+                        post_history.group.telegram_group_id,
                         limit=50
                     )
                 )
@@ -300,18 +301,20 @@ def monitor_replies_task(self, user_id: int):
                             reply = Reply(
                                 post_history_id=post_history.id,
                                 telegram_message_id=msg["id"],
-                                from_user_id=msg.get("from_user_id"),
-                                from_username=msg.get("from_user_name"),
-                                reply_text=msg.get("text", ""),
-                                replied_at=msg.get("date")
+                                user_id=user_id,
+                                group_id=post_history.group_id,
+                                telegram_user_id=msg.get("from_user_id"),
+                                telegram_user_name=msg.get("from_user_name"),
+                                message_text=msg.get("text", ""),
+                                received_at=datetime.fromtimestamp(msg["date"]) if msg.get("date") else datetime.utcnow()
                             )
                             db.add(reply)
+                            db.flush()
                             
                             # Create notification
                             notification = Notification(
                                 user_id=user_id,
-                                post_history_id=post_history.id,
-                                message=f"New reply from {msg.get('from_user_name', 'Unknown')}",
+                                reply_id=reply.id,
                                 is_read=False
                             )
                             db.add(notification)
@@ -457,7 +460,7 @@ def cleanup_old_logs():
 def check_scheduler():
     """Check if scheduler should post anything now (runs every minute)"""
     from app.core.database import SessionLocal
-    from app.models import SchedulerSettings, GroupFeed, Post
+    from app.models import SchedulerSettings, GroupFeed, Post, PostHistory
     from app.services.business import SchedulerService
     
     db = SessionLocal()
@@ -473,7 +476,7 @@ def check_scheduler():
         
         for scheduler in active_schedulers:
             # Check if in active window
-            if not scheduler_service.is_in_active_window(scheduler):
+            if not scheduler_service.is_in_active_window(db, scheduler.user_id):
                 continue
             
             # Get enabled groups in feed
@@ -481,8 +484,24 @@ def check_scheduler():
                 GroupFeed.user_id == scheduler.user_id,
                 GroupFeed.is_enabled == True
             ).order_by(GroupFeed.position).all()
+
+            now = datetime.utcnow()
+            hour_start = now - timedelta(hours=1)
+            day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            hourly_count = db.query(PostHistory).filter(PostHistory.user_id == scheduler.user_id, PostHistory.status == "success", PostHistory.created_at >= hour_start).count()
+            daily_count = db.query(PostHistory).filter(PostHistory.user_id == scheduler.user_id, PostHistory.status == "success", PostHistory.created_at >= day_start).count()
             
             for group_feed in feed_groups:
+                if hourly_count >= scheduler.max_posts_per_hour or daily_count >= scheduler.max_posts_per_day:
+                    break
+                recent = db.query(PostHistory).filter(
+                    PostHistory.user_id == scheduler.user_id,
+                    PostHistory.group_id == group_feed.group_id,
+                    PostHistory.status.in_(["success", "queued"]),
+                    PostHistory.created_at >= now - timedelta(minutes=1),
+                ).first()
+                if recent:
+                    continue
                 # Get a recommended post
                 recommended_post = db.query(Post).filter(
                     Post.user_id == scheduler.user_id,
@@ -497,6 +516,8 @@ def check_scheduler():
                         post_id=recommended_post.id
                     )
                     tasks_queued += 1
+                    hourly_count += 1
+                    daily_count += 1
                     logger.info(f"Queued post for user {scheduler.user_id} to group {group_feed.group_id}")
         
         return {"status": "checked", "tasks_queued": tasks_queued}

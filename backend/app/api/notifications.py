@@ -33,7 +33,14 @@ async def get_notifications(
         Notification.created_at.desc()
     ).offset(skip).limit(limit).all()
     
-    return notifications
+    return [{
+        "id": notification.id,
+        "group_name": notification.reply.group.name,
+        "telegram_user_name": notification.reply.telegram_user_name or "Unknown",
+        "message_text": notification.reply.message_text,
+        "received_at": notification.reply.received_at,
+        "is_read": notification.is_read,
+    } for notification in notifications]
 
 @router.get("/unread-count")
 async def get_unread_count(

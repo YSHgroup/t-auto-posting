@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models import TelegramGroup, GroupAnalysis, TelegramAccount, GroupFeed, User, AISettings
 from app.schemas import GroupSearchResult, GroupAnalysisResponse
-from app.core.security import get_current_user
+from app.api.auth import get_current_user
 from app.telegram.client import get_telegram_service
 from app.workers.implementations import analyze_group_task
 from typing import List, Optional
@@ -75,20 +75,22 @@ async def get_group(
     try:
         group = db.query(TelegramGroup).filter(
             TelegramGroup.id == group_id,
-            TelegramGroup.user_id == current_user.id
+            TelegramGroup.users.any(id=current_user.id)
         ).first()
         
         if not group:
             raise HTTPException(status_code=404, detail="Group not found")
         
         return {
-            "id": group.id,
-            "title": group.name,
+            "telegram_group_id": group.telegram_group_id,
+            "name": group.name,
             "username": group.username,
             "description": group.description,
-            "members_count": group.member_count,
-            "is_verified": group.is_verified,
-            "type": "supergroup" if group.is_public else "group"
+            "member_count": group.member_count or 0,
+            "is_public": group.is_public,
+            "already_joined": True,
+            "last_analyzed": group.analysis.analyzed_at if group.analysis else None,
+            "analysis": None,
         }
     
     except HTTPException:
@@ -112,7 +114,7 @@ async def analyze_group(
         # Check if group exists
         group = db.query(TelegramGroup).filter(
             TelegramGroup.id == group_id,
-            TelegramGroup.user_id == current_user.id
+            TelegramGroup.users.any(id=current_user.id)
         ).first()
         
         if not group:
@@ -161,7 +163,7 @@ async def add_group_to_feed(
     try:
         group = db.query(TelegramGroup).filter(
             TelegramGroup.id == group_id,
-            TelegramGroup.user_id == current_user.id
+            TelegramGroup.users.any(id=current_user.id)
         ).first()
         
         if not group:
@@ -212,8 +214,8 @@ async def manually_add_group(
     try:
         # Check if already exists
         existing = db.query(TelegramGroup).filter(
-            TelegramGroup.user_id == current_user.id,
-            TelegramGroup.telegram_id == request.telegram_id
+            TelegramGroup.users.any(id=current_user.id),
+            TelegramGroup.telegram_group_id == str(request.telegram_id)
         ).first()
         
         if existing:
@@ -221,7 +223,6 @@ async def manually_add_group(
         
         # Create group record
         group = TelegramGroup(
-            user_id=current_user.id,
             name=request.name,
             username=request.username,
             telegram_id=request.telegram_id,
@@ -232,6 +233,7 @@ async def manually_add_group(
         )
         db.add(group)
         db.flush()
+        group.users.append(current_user)
         
         # Add to feed
         feed_item = GroupFeed(

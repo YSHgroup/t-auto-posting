@@ -9,6 +9,7 @@ from app.schemas import SchedulerConfig, SchedulerStatus
 from app.api.auth import get_current_user
 from app.models import User
 from datetime import datetime
+from app.models import PostHistory
 
 router = APIRouter()
 
@@ -115,12 +116,15 @@ async def get_scheduler_status(
         SchedulerSettings.user_id == current_user.id
     ).first()
     
-    # TODO: Fetch actual stats from database
+    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    hour = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
+    successful = db.query(PostHistory).filter(PostHistory.user_id == current_user.id, PostHistory.status == "success")
+    last_post = successful.order_by(PostHistory.posted_at.desc()).first()
     return {
         "is_running": settings.posting_mode == "automatic" if settings else False,
         "posting_mode": settings.posting_mode if settings else "manual",
-        "last_post_at": None,
+        "last_post_at": last_post.posted_at if last_post else None,
         "next_post_at": None,
-        "posts_today": 0,
-        "posts_this_hour": 0
+        "posts_today": successful.filter(PostHistory.created_at >= today).count(),
+        "posts_this_hour": successful.filter(PostHistory.created_at >= hour).count()
     }

@@ -1,11 +1,11 @@
 """
 Opportunities API routes
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models import Opportunity
-from app.schemas import OpportunityResponse
+from app.schemas import OpportunityResponse, OpportunityAnalysisRequest, OpportunityStatusUpdate
 from typing import List, Optional
 from app.api.auth import get_current_user
 from app.models import User
@@ -36,7 +36,16 @@ async def get_opportunities(
         Opportunity.created_at.desc()
     ).offset(skip).limit(limit).all()
     
-    return opportunities
+    return [{
+        "id": opportunity.id,
+        "group_name": opportunity.group.name,
+        "telegram_user_name": opportunity.telegram_user_name or "Unknown",
+        "opportunity_type": opportunity.opportunity_type,
+        "evidence": opportunity.evidence,
+        "confidence": opportunity.confidence,
+        "relevance_reason": opportunity.relevance_reason,
+        "status": opportunity.status,
+    } for opportunity in opportunities]
 
 @router.get("/{opportunity_id}", response_model=OpportunityResponse)
 async def get_opportunity(
@@ -53,11 +62,20 @@ async def get_opportunity(
     if not opportunity:
         raise HTTPException(status_code=404, detail="Opportunity not found")
     
-    return opportunity
+    return {
+        "id": opportunity.id,
+        "group_name": opportunity.group.name,
+        "telegram_user_name": opportunity.telegram_user_name or "Unknown",
+        "opportunity_type": opportunity.opportunity_type,
+        "evidence": opportunity.evidence,
+        "confidence": opportunity.confidence,
+        "relevance_reason": opportunity.relevance_reason,
+        "status": opportunity.status,
+    }
 
 @router.post("/analyze")
 async def analyze_group_for_opportunities(
-    group_id: int,
+    request: OpportunityAnalysisRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -66,13 +84,14 @@ async def analyze_group_for_opportunities(
     Retrieves up to 500 recent messages and analyzes for investors/partners.
     Runs asynchronously via Celery worker.
     """
-    # TODO: Queue opportunity analysis task
-    return {"status": "analysis_queued", "group_id": group_id}
+    from app.workers.implementations import analyze_opportunities_task
+    task = analyze_opportunities_task.delay(current_user.id, request.group_id)
+    return {"status": "analysis_queued", "group_id": request.group_id, "task_id": task.id}
 
 @router.put("/{opportunity_id}/status")
 async def update_opportunity_status(
     opportunity_id: int,
-    status: str = Query(..., regex="^(new|reviewed|contacted|dismissed)$"),
+    request: OpportunityStatusUpdate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -85,7 +104,7 @@ async def update_opportunity_status(
     if not opportunity:
         raise HTTPException(status_code=404, detail="Opportunity not found")
     
-    opportunity.status = status
+    opportunity.status = request.status
     db.commit()
     
     return {"status": "updated"}

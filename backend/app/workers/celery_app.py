@@ -33,15 +33,15 @@ from celery.schedules import crontab
 
 celery_app.conf.beat_schedule = {
     'check-scheduler-every-minute': {
-        'task': 'app.workers.tasks.check_scheduler',
+        'task': 'app.workers.implementations.check_scheduler',
         'schedule': crontab(minute='*/1'),  # Every minute
     },
     'cleanup-old-logs-daily': {
-        'task': 'app.workers.tasks.cleanup_old_logs',
+        'task': 'app.workers.implementations.cleanup_old_logs',
         'schedule': crontab(hour=2, minute=0),  # Every day at 2 AM
     },
     'aggregate-statistics-hourly': {
-        'task': 'app.workers.tasks.aggregate_statistics',
+        'task': 'app.workers.implementations.aggregate_statistics',
         'schedule': crontab(minute=0),  # Every hour
     },
 }

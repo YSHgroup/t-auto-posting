@@ -124,6 +124,15 @@ class PostRecommendationResponse(BaseModel):
     compatibility_score: int  # 0-100
     alternative_posts: Optional[List[dict]] = None
 
+class ManualPostRequest(BaseModel):
+    group_id: int
+
+class OpportunityAnalysisRequest(BaseModel):
+    group_id: int
+
+class OpportunityStatusUpdate(BaseModel):
+    status: str = Field(pattern="^(new|reviewed|contacted|dismissed)$")
+
 # ============ Scheduler Schemas ============
 class SchedulerConfig(BaseModel):
     posting_mode: str  # manual or automatic

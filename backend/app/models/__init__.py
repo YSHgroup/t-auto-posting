@@ -1,8 +1,8 @@
 """
 Database models for all entities
 """
-from sqlalchemy import Column, String, Integer, DateTime, Boolean, Text, Float, ForeignKey, Table, Enum
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, String, Integer, DateTime, Boolean, Text, Float, ForeignKey, Table
+from sqlalchemy.orm import relationship, synonym
 from datetime import datetime
 import enum
 from app.core.database import Base
@@ -80,6 +80,7 @@ class TelegramGroup(Base):
     description = Column(Text, nullable=True)
     is_public = Column(Boolean, default=False)
     is_supergroup = Column(Boolean, default=False)
+    is_verified = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -93,6 +94,14 @@ class TelegramGroup(Base):
     replies = relationship("Reply", back_populates="group")
     opportunities = relationship("Opportunity", back_populates="group")
 
+    @property
+    def telegram_id(self):
+        return self.telegram_group_id
+
+    @telegram_id.setter
+    def telegram_id(self, value):
+        self.telegram_group_id = str(value)
+
 
 class GroupAnalysis(Base):
     """AI analysis results for a group"""
@@ -100,6 +109,7 @@ class GroupAnalysis(Base):
     
     id = Column(Integer, primary_key=True)
     group_id = Column(Integer, ForeignKey("telegram_groups.id"), unique=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     group_types = Column(Text)  # JSON array
     partnership_suitability = Column(String)  # Suitable, Possibly, Not Recommended
     partnership_reason = Column(Text)
@@ -111,6 +121,7 @@ class GroupAnalysis(Base):
     confidence_score = Column(Integer)  # 0-100
     analysis_text = Column(Text)
     analyzed_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
     group = relationship("TelegramGroup", back_populates="analysis")
@@ -118,7 +129,7 @@ class GroupAnalysis(Base):
 
 class GroupCategory(Base):
     """Categories for grouping (developer, startup, etc)"""
-    __tablename__ = "group_categories"
+    __tablename__ = "categories"
     
     id = Column(Integer, primary_key=True)
     name = Column(String, unique=True, index=True)
@@ -232,6 +243,22 @@ class Reply(Base):
     telegram_message_id = Column(String)
     received_at = Column(DateTime)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    @property
+    def from_user_id(self):
+        return self.telegram_user_id
+
+    @property
+    def from_username(self):
+        return self.telegram_user_name
+
+    @property
+    def reply_text(self):
+        return self.message_text
+
+    @property
+    def replied_at(self):
+        return self.received_at
     
     # Relationships
     user = relationship("User", back_populates="replies")

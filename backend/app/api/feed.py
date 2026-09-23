@@ -4,7 +4,7 @@ Feed management API routes
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.models import GroupFeed, TelegramGroup
+from app.models import GroupFeed, TelegramGroup, PostHistory, Reply
 from app.schemas import FeedItem, FeedReorderRequest
 from typing import List
 from app.api.auth import get_current_user
@@ -22,15 +22,28 @@ async def get_feed(
         GroupFeed.user_id == current_user.id
     ).order_by(GroupFeed.position).all()
     
-    return feed_items
+    return [{
+        "id": item.id,
+        "position": item.position,
+        "group_name": item.group.name,
+        "group_username": item.group.username,
+        "member_count": item.group.member_count or 0,
+        "is_enabled": item.is_enabled,
+        "category": None,
+        "last_post_at": None,
+        "next_scheduled_post": None,
+        "post_count": db.query(PostHistory).filter(PostHistory.user_id == current_user.id, PostHistory.group_id == item.group_id, PostHistory.status == "success").count(),
+        "reply_count": db.query(Reply).filter(Reply.user_id == current_user.id, Reply.group_id == item.group_id).count(),
+    } for item in feed_items]
 
 @router.post("/add")
 async def add_to_feed(
-    group_id: int,
+    request: dict,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Add group to feed"""
+    group_id = request.get("group_id")
     group = db.query(TelegramGroup).filter(TelegramGroup.id == group_id).first()
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
@@ -138,5 +151,18 @@ async def get_post_recommendations(
     if not feed_item:
         raise HTTPException(status_code=404, detail="Feed item not found")
     
-    # TODO: Query AI service for recommendations
-    return {"recommendations": []}
+    from app.models import Post, GroupAnalysis
+    posts = db.query(Post).filter(Post.user_id == current_user.id, Post.is_active == True).all()
+    if not posts:
+        return {"recommendations": []}
+    analysis = db.query(GroupAnalysis).filter(GroupAnalysis.group_id == feed_item.group_id).first()
+    selected = posts[0]
+    return {"recommendations": [{
+        "group_id": feed_item.group_id,
+        "group_name": feed_item.group.name,
+        "recommended_post_id": selected.id,
+        "recommended_post_title": selected.title,
+        "reason": "Selected from active posts; analyze the group to improve matching.",
+        "compatibility_score": analysis.confidence_score if analysis else 50,
+        "alternative_posts": [{"id": post.id, "title": post.title} for post in posts[1:5]],
+    }]}

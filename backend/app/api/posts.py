@@ -4,11 +4,24 @@ Posts API routes
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.models import Post
-from app.schemas import PostCreate, PostUpdate, PostResponse
+from app.models import Post, TelegramGroup
+from app.schemas import PostCreate, PostUpdate, PostResponse, ManualPostRequest
 from typing import List
 from app.api.auth import get_current_user
 from app.models import User
+import json
+
+def _post_response(post: Post) -> dict:
+    return {
+        "id": post.id,
+        "title": post.title,
+        "content": post.content,
+        "post_type": post.post_type,
+        "tags": json.loads(post.tags) if post.tags else None,
+        "links": json.loads(post.links) if post.links else None,
+        "is_active": post.is_active,
+        "created_at": post.created_at,
+    }
 
 router = APIRouter()
 
@@ -24,7 +37,7 @@ async def list_posts(
         Post.user_id == current_user.id
     ).offset(skip).limit(limit).all()
     
-    return posts
+    return [_post_response(post) for post in posts]
 
 @router.post("", response_model=PostResponse)
 async def create_post(
@@ -38,8 +51,8 @@ async def create_post(
         title=request.title,
         content=request.content,
         post_type=request.post_type,
-        tags=str(request.tags) if request.tags else None,
-        links=str(request.links) if request.links else None,
+        tags=json.dumps(request.tags) if request.tags else None,
+        links=json.dumps(request.links) if request.links else None,
         is_active=True
     )
     
@@ -47,7 +60,7 @@ async def create_post(
     db.commit()
     db.refresh(post)
     
-    return post
+    return _post_response(post)
 
 @router.get("/{post_id}", response_model=PostResponse)
 async def get_post(
@@ -87,16 +100,16 @@ async def update_post(
     if request.post_type is not None:
         post.post_type = request.post_type
     if request.tags is not None:
-        post.tags = str(request.tags)
+        post.tags = json.dumps(request.tags)
     if request.links is not None:
-        post.links = str(request.links)
+        post.links = json.dumps(request.links)
     if request.is_active is not None:
         post.is_active = request.is_active
     
     db.commit()
     db.refresh(post)
     
-    return post
+    return _post_response(post)
 
 @router.delete("/{post_id}")
 async def delete_post(
@@ -145,4 +158,26 @@ async def duplicate_post(
     db.commit()
     db.refresh(duplicate)
     
-    return duplicate
+    return _post_response(duplicate)
+
+@router.post("/{post_id}/send")
+async def send_post(
+    post_id: int,
+    request: ManualPostRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Queue a post for immediate delivery to one of the user's groups."""
+    post = db.query(Post).filter(Post.id == post_id, Post.user_id == current_user.id).first()
+    group = db.query(TelegramGroup).join(TelegramGroup.users).filter(
+        TelegramGroup.id == request.group_id,
+        User.id == current_user.id,
+    ).first()
+    if not post or not post.is_active:
+        raise HTTPException(status_code=404, detail="Active post not found")
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    from app.workers.implementations import post_to_group_task
+    task = post_to_group_task.delay(current_user.id, group.id, post.id)
+    return {"status": "queued", "task_id": task.id, "post_id": post.id, "group_id": group.id}
