@@ -1,0 +1,42 @@
+"""
+Chrome Extension manifest for Telegram Intelligence Bot
+"""
+{
+  "manifest_version": 3,
+  "name": "Telegram Intelligence & Posting Bot",
+  "version": "1.0.0",
+  "description": "AI-powered Telegram group analysis and automatic posting system",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "tabs"
+  ],
+  "host_permissions": [
+    "http://localhost:8000/*",
+    "http://localhost:3000/*"
+  ],
+  "action": {
+    "default_popup": "dist/popup.html",
+    "default_title": "Telegram Intelligence Bot"
+  },
+  "background": {
+    "service_worker": "dist/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["dist/content.js"]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["dist/*"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "icons": {
+    "16": "public/icons/icon-16.png",
+    "48": "public/icons/icon-48.png",
+    "128": "public/icons/icon-128.png"
+  }
+}

@@ -1,0 +1,142 @@
+"""
+Feed management API routes
+"""
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from app.core.database import get_db
+from app.models import GroupFeed, TelegramGroup
+from app.schemas import FeedItem, FeedReorderRequest
+from typing import List
+from app.api.auth import get_current_user
+from app.models import User
+
+router = APIRouter()
+
+@router.get("", response_model=List[FeedItem])
+async def get_feed(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get user's group feed in order"""
+    feed_items = db.query(GroupFeed).filter(
+        GroupFeed.user_id == current_user.id
+    ).order_by(GroupFeed.position).all()
+    
+    return feed_items
+
+@router.post("/add")
+async def add_to_feed(
+    group_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Add group to feed"""
+    group = db.query(TelegramGroup).filter(TelegramGroup.id == group_id).first()
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    
+    # Check if already in feed
+    existing = db.query(GroupFeed).filter(
+        (GroupFeed.user_id == current_user.id) & 
+        (GroupFeed.group_id == group_id)
+    ).first()
+    
+    if existing:
+        raise HTTPException(status_code=400, detail="Group already in feed")
+    
+    # Get max position
+    max_position = db.query(GroupFeed).filter(
+        GroupFeed.user_id == current_user.id
+    ).order_by(GroupFeed.position.desc()).first()
+    
+    new_position = (max_position.position + 1) if max_position else 1
+    
+    feed_item = GroupFeed(
+        user_id=current_user.id,
+        group_id=group_id,
+        position=new_position,
+        is_enabled=True
+    )
+    
+    db.add(feed_item)
+    db.commit()
+    db.refresh(feed_item)
+    
+    return {"status": "added", "feed_item_id": feed_item.id}
+
+@router.put("/reorder")
+async def reorder_feed(
+    request: FeedReorderRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Reorder feed items"""
+    for item in request.items:
+        feed_item = db.query(GroupFeed).filter(
+            (GroupFeed.id == item["id"]) &
+            (GroupFeed.user_id == current_user.id)
+        ).first()
+        
+        if feed_item:
+            feed_item.position = item["position"]
+    
+    db.commit()
+    return {"status": "reordered"}
+
+@router.put("/{feed_item_id}/toggle")
+async def toggle_feed_item(
+    feed_item_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Enable/disable a feed item"""
+    feed_item = db.query(GroupFeed).filter(
+        (GroupFeed.id == feed_item_id) &
+        (GroupFeed.user_id == current_user.id)
+    ).first()
+    
+    if not feed_item:
+        raise HTTPException(status_code=404, detail="Feed item not found")
+    
+    feed_item.is_enabled = not feed_item.is_enabled
+    db.commit()
+    
+    return {"status": "toggled", "is_enabled": feed_item.is_enabled}
+
+@router.delete("/{feed_item_id}")
+async def remove_from_feed(
+    feed_item_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Remove group from feed"""
+    feed_item = db.query(GroupFeed).filter(
+        (GroupFeed.id == feed_item_id) &
+        (GroupFeed.user_id == current_user.id)
+    ).first()
+    
+    if not feed_item:
+        raise HTTPException(status_code=404, detail="Feed item not found")
+    
+    db.delete(feed_item)
+    db.commit()
+    
+    return {"status": "removed"}
+
+@router.get("/{feed_item_id}/recommendations")
+async def get_post_recommendations(
+    feed_item_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get AI post recommendations for a group"""
+    feed_item = db.query(GroupFeed).filter(
+        (GroupFeed.id == feed_item_id) &
+        (GroupFeed.user_id == current_user.id)
+    ).first()
+    
+    if not feed_item:
+        raise HTTPException(status_code=404, detail="Feed item not found")
+    
+    # TODO: Query AI service for recommendations
+    return {"recommendations": []}
