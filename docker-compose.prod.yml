@@ -1,0 +1,8 @@
+services:
+  backend:
+    restart: unless-stopped
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+  celery_worker:
+    restart: unless-stopped
+  celery_beat:
+    restart: unless-stopped

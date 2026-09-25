@@ -151,7 +151,7 @@ group_categories_table = Table(
     "group_categories",
     Base.metadata,
     Column("group_id", Integer, ForeignKey("telegram_groups.id")),
-    Column("category_id", Integer, ForeignKey("group_categories.id"))
+    Column("category_id", Integer, ForeignKey("categories.id"))
 )
 
 

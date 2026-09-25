@@ -94,6 +94,10 @@ class APIClient {
     return response.data
   }
 
+  async getMe() {
+    return this.client.get('/auth/me')
+  }
+
   async register(email: string, username: string, password: string) {
     return this.client.post('/auth/register', { email, username, password })
   }
@@ -105,6 +109,26 @@ class APIClient {
   // Group endpoints
   async searchGroups(query: string, limit: number = 50) {
     return this.client.get('/groups/search', { params: { q: query, limit } })
+  }
+
+  async addGroup(group: { telegram_id: number; name: string; username?: string }) {
+    return this.client.post('/groups/manual-add', { group_id: group.telegram_id, ...group })
+  }
+
+  async requestTelegramCode(phone: string) {
+    return this.client.post('/telegram/login/request-code', { phone })
+  }
+
+  async verifyTelegramCode(phone: string, code: string) {
+    return this.client.post('/telegram/login/verify-code', { phone, code })
+  }
+
+  async verifyTelegram2FA(password: string) {
+    return this.client.post('/telegram/login/verify-2fa', { password })
+  }
+
+  async getTelegramStatus() {
+    return this.client.get('/telegram/status')
   }
 
   async getGroup(groupId: string) {

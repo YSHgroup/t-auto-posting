@@ -8,6 +8,7 @@ from app.models import TelegramGroup, GroupAnalysis, TelegramAccount, GroupFeed,
 from app.schemas import GroupSearchResult, GroupAnalysisResponse
 from app.api.auth import get_current_user
 from app.telegram.client import get_telegram_service
+from app.core.security import decrypt_credentials
 from app.workers.implementations import analyze_group_task
 from typing import List, Optional
 from pydantic import BaseModel
@@ -48,12 +49,23 @@ async def search_groups(
             )
         
         # Search groups via Telegram
-        telegram_service = get_telegram_service(telegram_account.session_string)
+        telegram_service = get_telegram_service(decrypt_credentials(telegram_account.session_string), current_user.id)
         results = await telegram_service.search_groups(q, limit=limit)
         
         logger.info(f"User {current_user.id} searched for '{q}' ({len(results)} results)")
         
-        return results
+        return [{
+            "telegram_group_id": str(result.get("id")),
+            "name": result.get("title", "Untitled group"),
+            "username": result.get("username"),
+            "member_count": result.get("members_count", 0) or 0,
+            "description": None,
+            "is_public": result.get("is_public", False),
+            "relevance_score": None,
+            "already_joined": False,
+            "last_analyzed": None,
+            "analysis": None,
+        } for result in results]
     
     except HTTPException:
         raise

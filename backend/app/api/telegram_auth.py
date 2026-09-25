@@ -4,7 +4,8 @@ Telegram authentication endpoints
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.core.security import get_current_user
+from app.api.auth import get_current_user
+from app.core.security import encrypt_credentials, decrypt_credentials
 from app.models import User, TelegramAccount
 from app.telegram.client import get_telegram_service
 from pyrogram.errors import SessionPasswordNeeded, RpcError
@@ -50,7 +51,7 @@ async def request_telegram_code(
             phone = "+" + phone
         
         # Initialize Telegram service
-        telegram_service = get_telegram_service()
+        telegram_service = get_telegram_service(user_id=current_user.id)
         
         # Request login code
         await telegram_service.login_with_phone(phone)
@@ -89,7 +90,7 @@ async def verify_telegram_code(
     If 2FA is enabled, will raise SessionPasswordNeeded
     """
     try:
-        telegram_service = get_telegram_service()
+        telegram_service = get_telegram_service(user_id=current_user.id)
         
         # Verify code
         session_string = await telegram_service.verify_code(
@@ -106,12 +107,14 @@ async def verify_telegram_code(
             telegram_account = TelegramAccount(
                 user_id=current_user.id,
                 phone_number=request.phone,
-                session_string=session_string
+                session_string=encrypt_credentials(session_string),
+                is_active=True
             )
             db.add(telegram_account)
         else:
-            telegram_account.session_string = session_string
+            telegram_account.session_string = encrypt_credentials(session_string)
             telegram_account.phone_number = request.phone
+            telegram_account.is_active = True
         
         db.commit()
         
@@ -156,7 +159,7 @@ async def verify_2fa(
     Only required if account has 2FA enabled
     """
     try:
-        telegram_service = get_telegram_service()
+        telegram_service = get_telegram_service(user_id=current_user.id)
         
         # Verify 2FA password
         session_string = await telegram_service.verify_2fa(request.password)
@@ -172,7 +175,8 @@ async def verify_2fa(
                 detail="No pending Telegram login session"
             )
         
-        telegram_account.session_string = session_string
+        telegram_account.session_string = encrypt_credentials(session_string)
+        telegram_account.is_active = True
         db.commit()
         
         logger.info(f"User {current_user.id} verified 2FA password")
@@ -213,7 +217,7 @@ async def get_telegram_status(
         return TelegramStatusResponse(
             connected=True,
             phone=telegram_account.phone_number,
-            first_name=telegram_account.first_name
+            first_name=None
         )
     except Exception as e:
         logger.error(f"Error getting Telegram status: {e}")

@@ -306,9 +306,14 @@ class TelegramService:
             logger.error(f"Error closing Telegram client: {e}")
 
 
-# Singleton instance
-_telegram_service: Optional[TelegramService] = None
+# One service per authenticated user preserves the pending login state between OTP steps.
+_telegram_services: Dict[str, TelegramService] = {}
 
-def get_telegram_service(session_string: Optional[str] = None) -> TelegramService:
-    """Get Telegram service instance"""
-    return TelegramService(session_string=session_string)
+def get_telegram_service(session_string: Optional[str] = None, user_id: Optional[int] = None) -> TelegramService:
+    """Get a stable Telegram service for login flows or a session-backed worker client."""
+    key = f"user:{user_id}" if user_id is not None else f"session:{session_string or 'anonymous'}"
+    service = _telegram_services.get(key)
+    if service is None or (session_string and service.session_string != session_string):
+        service = TelegramService(session_string=session_string)
+        _telegram_services[key] = service
+    return service

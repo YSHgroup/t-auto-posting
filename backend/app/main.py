@@ -5,12 +5,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.core.config import settings
-from app.core.database import engine, Base
 from app.api import auth, groups, feed, posts, scheduler, notifications, opportunities, statistics
 from app.api import telegram_auth
-
-# Create tables on startup
-Base.metadata.create_all(bind=engine)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

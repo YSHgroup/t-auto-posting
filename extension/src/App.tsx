@@ -21,17 +21,13 @@ import Header from './components/Header'
 function App() {
   const isLoggedIn = useAuthStore((state) => state.isLoggedIn)
 
-  if (!isLoggedIn) {
-    return <Login />
-  }
-
   return (
-    <div className="flex h-screen bg-gray-50">
-      <Sidebar />
-      <div className="flex-1 flex flex-col">
-        <Header />
-        <main className="flex-1 overflow-auto">
-          <Router>
+    <Router>
+      {!isLoggedIn ? <Login /> : <div className="flex h-screen bg-gray-50">
+        <Sidebar />
+        <div className="flex-1 flex flex-col">
+          <Header />
+          <main className="flex-1 overflow-auto">
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/groups" element={<Groups />} />
@@ -42,10 +38,10 @@ function App() {
               <Route path="/opportunities" element={<Opportunities />} />
               <Route path="/settings" element={<Settings />} />
             </Routes>
-          </Router>
-        </main>
-      </div>
-    </div>
+          </main>
+        </div>
+      </div>}
+    </Router>
   )
 }
 

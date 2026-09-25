@@ -9,6 +9,8 @@ from app.schemas import FeedItem, FeedReorderRequest
 from typing import List
 from app.api.auth import get_current_user
 from app.models import User
+from app.core.config import settings
+import json
 
 router = APIRouter()
 
@@ -151,18 +153,37 @@ async def get_post_recommendations(
     if not feed_item:
         raise HTTPException(status_code=404, detail="Feed item not found")
     
-    from app.models import Post, GroupAnalysis
+    from app.models import Post, GroupAnalysis, AISettings
     posts = db.query(Post).filter(Post.user_id == current_user.id, Post.is_active == True).all()
     if not posts:
         return {"recommendations": []}
     analysis = db.query(GroupAnalysis).filter(GroupAnalysis.group_id == feed_item.group_id).first()
-    selected = posts[0]
+    ai_settings = db.query(AISettings).filter(AISettings.user_id == current_user.id).first()
+    analysis_data = {}
+    if analysis and analysis.analysis_text:
+        try:
+            analysis_data = json.loads(analysis.analysis_text)
+        except json.JSONDecodeError:
+            analysis_data = {"analysis": analysis.analysis_text}
+
+    recommendation = None
+    if ai_settings:
+        from app.ai.providers import OpenAIProvider, ClaudeProvider
+        provider = OpenAIProvider(settings.OPENAI_API_KEY, ai_settings.model) if ai_settings.provider == "openai" else ClaudeProvider(settings.ANTHROPIC_API_KEY, ai_settings.model)
+        recommendation = await provider.recommend_post(
+            analysis_data,
+            [{"id": post.id, "title": post.title, "content": post.content, "type": post.post_type} for post in posts],
+        )
+
+    recommended_id = recommendation.get("recommended_post_id") if recommendation else None
+    selected = next((post for post in posts if post.id == recommended_id), posts[0])
+    alternatives = recommendation.get("alternatives", []) if recommendation else []
     return {"recommendations": [{
         "group_id": feed_item.group_id,
         "group_name": feed_item.group.name,
         "recommended_post_id": selected.id,
         "recommended_post_title": selected.title,
-        "reason": "Selected from active posts; analyze the group to improve matching.",
-        "compatibility_score": analysis.confidence_score if analysis else 50,
-        "alternative_posts": [{"id": post.id, "title": post.title} for post in posts[1:5]],
+        "reason": recommendation.get("reason", "Selected from active posts; analyze the group to improve matching.") if recommendation else "Selected from active posts; analyze the group to improve matching.",
+        "compatibility_score": recommendation.get("compatibility_score", 50) if recommendation else (analysis.confidence_score if analysis else 50),
+        "alternative_posts": [{"id": post.id, "title": post.title} for post in posts if post.id in alternatives][:5],
     }]}

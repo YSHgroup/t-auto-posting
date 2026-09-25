@@ -4,11 +4,12 @@ Application settings and configuration
 from pydantic_settings import BaseSettings
 from typing import List
 import os
+import json
 
 class Settings(BaseSettings):
     # Application
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "change-me-to-a-random-32-character-secret")
     
     # Database
     DATABASE_URL: str = os.getenv(
@@ -45,11 +46,10 @@ class Settings(BaseSettings):
     CELERY_RESULT_BACKEND: str = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/1")
     
     # CORS
-    CORS_ORIGINS: List[str] = [
-        "http://localhost:3000",
-        "http://localhost:8000",
-        "chrome-extension://localhost",
-    ]
+    CORS_ORIGINS: List[str] = json.loads(os.getenv(
+        "CORS_ORIGINS",
+        '["http://localhost:3000", "http://localhost:8000", "chrome-extension://localhost"]',
+    ))
     
     # Logging
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")

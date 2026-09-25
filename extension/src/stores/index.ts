@@ -3,6 +3,7 @@ Global state store using Zustand
 """
 import { create } from 'zustand'
 import { User, Statistics, SchedulerConfig } from '../types'
+import api from '../services/api'
 
 interface AuthStore {
   user: User | null
@@ -20,13 +21,15 @@ export const useAuthStore = create<AuthStore>((set) => ({
   login: async (email: string, password: string) => {
     set({ isLoading: true })
     try {
-      // TODO: Call API
-      set({ isLoggedIn: true })
+      await api.login(email, password)
+      const response = await api.getMe()
+      set({ user: response.data, isLoggedIn: true })
     } finally {
       set({ isLoading: false })
     }
   },
   logout: async () => {
+    await api.logout()
     set({ user: null, isLoggedIn: false })
   },
   setUser: (user: User) => set({ user }),

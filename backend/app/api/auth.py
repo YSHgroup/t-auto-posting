@@ -6,10 +6,14 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token, verify_token
 from app.schemas import LoginRequest, TokenResponse, UserCreate, UserResponse
+from pydantic import BaseModel
 from app.models import User
 from datetime import timedelta
 
 router = APIRouter()
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
 
 @router.post("/login", response_model=TokenResponse)
 async def login(request: LoginRequest, db: Session = Depends(get_db)):
@@ -71,9 +75,9 @@ async def register(request: UserCreate, db: Session = Depends(get_db)):
     return user
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh_token(refresh_token: str):
+async def refresh_token(request: RefreshTokenRequest):
     """Refresh access token using refresh token"""
-    payload = verify_token(refresh_token)
+    payload = verify_token(request.refresh_token)
     
     if not payload or payload.get("type") != "refresh":
         raise HTTPException(

@@ -37,6 +37,7 @@ def analyze_group_task(self, user_id: int, group_id: int):
     from app.models import TelegramGroup, GroupAnalysis, TelegramAccount, AISettings
     from app.ai.providers import OpenAIProvider, ClaudeProvider
     from app.telegram.client import get_telegram_service
+    from app.core.security import decrypt_credentials
     from app.core.config import settings
     
     db = SessionLocal()
@@ -62,7 +63,7 @@ def analyze_group_task(self, user_id: int, group_id: int):
             return {"status": "error", "message": "Telegram not configured"}
         
         # Get messages from Telegram
-        telegram_service = get_telegram_service(telegram_account.session_string)
+        telegram_service = get_telegram_service(decrypt_credentials(telegram_account.session_string))
         messages = _run_async_task(
             telegram_service.get_recent_messages(group.telegram_id, limit=100)
         )
@@ -153,6 +154,7 @@ def post_to_group_task(self, user_id: int, group_id: int, post_id: int):
     from app.models import Post, TelegramGroup, TelegramAccount, PostHistory
     from app.services.business import PostingService, GroupService
     from app.telegram.client import get_telegram_service
+    from app.core.security import decrypt_credentials
     from pyrogram.errors import FloodWait
     
     db = SessionLocal()
@@ -195,7 +197,7 @@ def post_to_group_task(self, user_id: int, group_id: int, post_id: int):
             return {"status": "error", "message": "Telegram not configured"}
         
         # Send message
-        telegram_service = get_telegram_service(telegram_account.session_string)
+        telegram_service = get_telegram_service(decrypt_credentials(telegram_account.session_string))
         message_id = _run_async_task(
             telegram_service.send_message(group.telegram_group_id, post.content)
         )
@@ -252,6 +254,7 @@ def monitor_replies_task(self, user_id: int):
     from app.core.database import SessionLocal
     from app.models import PostHistory, TelegramAccount, Reply, Notification
     from app.telegram.client import get_telegram_service
+    from app.core.security import decrypt_credentials
     
     db = SessionLocal()
     
@@ -276,7 +279,7 @@ def monitor_replies_task(self, user_id: int):
             return {"status": "no_posts"}
         
         # Check for replies to each post
-        telegram_service = get_telegram_service(telegram_account.session_string)
+        telegram_service = get_telegram_service(decrypt_credentials(telegram_account.session_string))
         reply_count = 0
         
         for post_history in recent_posts:
@@ -345,6 +348,7 @@ def analyze_opportunities_task(self, user_id: int, group_id: int):
     from app.models import TelegramAccount, Opportunity, AISettings
     from app.ai.providers import OpenAIProvider, ClaudeProvider
     from app.telegram.client import get_telegram_service
+    from app.core.security import decrypt_credentials
     from app.core.config import settings
     
     db = SessionLocal()
@@ -360,7 +364,7 @@ def analyze_opportunities_task(self, user_id: int, group_id: int):
             return {"status": "error", "message": "Telegram not configured"}
         
         # Get recent messages
-        telegram_service = get_telegram_service(telegram_account.session_string)
+        telegram_service = get_telegram_service(decrypt_credentials(telegram_account.session_string))
         messages = _run_async_task(
             telegram_service.get_recent_messages(group_id, limit=100)
         )

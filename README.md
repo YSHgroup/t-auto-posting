@@ -1,6 +1,6 @@
 # Telegram Intelligence & Automated Posting System
 
-A production-ready Chrome Extension + FastAPI backend system for discovering, analyzing, and automatically posting to Telegram groups with AI-powered recommendations.
+A Chrome Extension + FastAPI backend for discovering, analyzing, and automatically posting to Telegram groups with AI-powered recommendations. Core workflows are implemented; production deployment still requires real Telegram/AI credentials and dependency installation.
 
 ## Features
 
@@ -16,7 +16,7 @@ A production-ready Chrome Extension + FastAPI backend system for discovering, an
 - 📈 **Statistics**: Track posting history, success rates, and engagement
 
 ### Security
-- ✅ Encrypted credential storage
+- ✅ Fernet-encrypted Telegram session storage
 - ✅ JWT-based authentication
 - ✅ Backend-only Telegram access
 - ✅ Rate limiting and anti-spam protection
@@ -56,6 +56,8 @@ cp .env.example .env
 ```bash
 docker-compose up -d
 ```
+
+Docker reads integration settings from `.env`. Set `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, `SECRET_KEY`, and at least one AI provider key before using those features.
 
 This starts:
 - PostgreSQL (port 5432)
@@ -246,6 +248,8 @@ npm run test
 ```bash
 docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
+
+The production override enables restart policies and runs Alembic before starting the API. Put the deployment behind HTTPS and provide a strong `SECRET_KEY`.
 
 ## Security Notes
 

@@ -6,6 +6,8 @@ from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from cryptography.fernet import Fernet
+import base64
+import hashlib
 import os
 from app.core.config import settings
 
@@ -65,20 +67,13 @@ def verify_token(token: str) -> Optional[dict]:
 # Credential encryption/decryption
 def get_cipher():
     """Get Fernet cipher for encryption"""
-    # Ensure key is 32 bytes
-    key = settings.SECRET_KEY.encode()[:32].ljust(32, b'0')
-    # Fernet requires base64-encoded 32 bytes
-    encoded_key = Fernet.generate_key()  # Will be replaced with proper key
-    # For now, use a simple approach - proper implementation would use a secure key derivation
-    return None
+    key = hashlib.sha256(settings.SECRET_KEY.encode()).digest()
+    return Fernet(base64.urlsafe_b64encode(key))
 
 def encrypt_credentials(data: str) -> str:
     """Encrypt sensitive credentials"""
-    # Placeholder - implement with proper encryption
-    # In production, use a proper key management system
-    return data
+    return get_cipher().encrypt(data.encode()).decode()
 
 def decrypt_credentials(encrypted_data: str) -> str:
     """Decrypt sensitive credentials"""
-    # Placeholder - implement with proper decryption
-    return encrypted_data
+    return get_cipher().decrypt(encrypted_data.encode()).decode()

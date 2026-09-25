@@ -7,7 +7,7 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
-    minify: 'terser',
+    minify: 'esbuild',
     rollupOptions: {
       input: {
         popup: path.resolve(__dirname, 'src/pages/popup.html'),

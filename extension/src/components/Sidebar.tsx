@@ -3,6 +3,7 @@ Sidebar component
 """
 import { Link } from 'react-router-dom'
 import { useUIStore } from '../stores'
+import { useAuthStore } from '../stores'
 import {
   BarChart3,
   Search,
@@ -17,6 +18,7 @@ import {
 
 export default function Sidebar() {
   const { currentPage, setCurrentPage } = useUIStore()
+  const logout = useAuthStore((state) => state.logout)
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home, path: '/' },
@@ -72,7 +74,7 @@ export default function Sidebar() {
         </Link>
         <button
           onClick={async () => {
-            // TODO: Logout
+            await logout()
           }}
           className="w-full flex items-center gap-3 px-6 py-3 text-gray-300 hover:bg-red-600 transition mt-2"
         >
