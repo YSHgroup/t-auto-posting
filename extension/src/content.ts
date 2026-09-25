@@ -1,7 +1,3 @@
-"""
-Content script for extension
-"""
-
 // This script runs on web pages
 // Currently minimal functionality, can be expanded for page context
 

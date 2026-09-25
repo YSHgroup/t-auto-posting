@@ -1,6 +1,4 @@
-"""
-Header component
-"""
+// Header component
 import { Bell, User, Menu } from 'lucide-react'
 import { useDataStore } from '../stores'
 

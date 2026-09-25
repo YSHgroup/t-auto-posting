@@ -1,9 +1,7 @@
-"""
-API client service for extension
-"""
+// API client service for extension
 import axios, { AxiosInstance } from 'axios'
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api'
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
 
 class APIClient {
   private client: AxiosInstance
@@ -42,9 +40,13 @@ class APIClient {
   }
 
   private loadToken() {
-    chrome.storage.local.get(['accessToken'], (result) => {
-      this.accessToken = result.accessToken || null
-    })
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      chrome.storage.local.get(['accessToken'], (result) => {
+        this.accessToken = result.accessToken || null
+      })
+      return
+    }
+    this.accessToken = localStorage.getItem('accessToken')
   }
 
   async refreshToken() {
@@ -66,6 +68,9 @@ class APIClient {
   }
 
   private async getRefreshToken(): Promise<string | null> {
+    if (typeof chrome === 'undefined' || !chrome.storage?.local) {
+      return localStorage.getItem('refreshToken')
+    }
     return new Promise((resolve) => {
       chrome.storage.local.get(['refreshToken'], (result) => {
         resolve(result.refreshToken || null)
@@ -74,6 +79,11 @@ class APIClient {
   }
 
   private async saveToken(accessToken: string, refreshToken: string) {
+    if (typeof chrome === 'undefined' || !chrome.storage?.local) {
+      localStorage.setItem('accessToken', accessToken)
+      localStorage.setItem('refreshToken', refreshToken)
+      return
+    }
     return new Promise<void>((resolve) => {
       chrome.storage.local.set({ accessToken, refreshToken }, () => {
         resolve()
@@ -82,7 +92,12 @@ class APIClient {
   }
 
   private clearTokens() {
-    chrome.storage.local.remove(['accessToken', 'refreshToken'])
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      chrome.storage.local.remove(['accessToken', 'refreshToken'])
+    } else {
+      localStorage.removeItem('accessToken')
+      localStorage.removeItem('refreshToken')
+    }
     this.accessToken = null
   }
 

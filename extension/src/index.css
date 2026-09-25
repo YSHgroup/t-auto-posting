@@ -1,6 +1,4 @@
-"""
-Global styles
-"""
+/* Global styles */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

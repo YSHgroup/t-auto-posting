@@ -1,6 +1,4 @@
-"""
-Main App component
-"""
+// Main App component
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { useAuthStore, useUIStore } from './stores'
 import { useEffect } from 'react'

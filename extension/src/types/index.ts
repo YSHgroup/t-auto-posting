@@ -1,6 +1,4 @@
-"""
-TypeScript types for extension
-"""
+// TypeScript types for extension
 export interface User {
   id: number
   email: string

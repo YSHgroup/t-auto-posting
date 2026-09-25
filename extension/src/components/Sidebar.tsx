@@ -1,6 +1,4 @@
-"""
-Sidebar component
-"""
+// Sidebar component
 import { Link } from 'react-router-dom'
 import { useUIStore } from '../stores'
 import { useAuthStore } from '../stores'

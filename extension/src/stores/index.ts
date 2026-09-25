@@ -1,6 +1,4 @@
-"""
-Global state store using Zustand
-"""
+// Global state store using Zustand
 import { create } from 'zustand'
 import { User, Statistics, SchedulerConfig } from '../types'
 import api from '../services/api'

@@ -1,6 +1,4 @@
-"""
-Background service worker for extension
-"""
+// Background service worker for extension
 
 // Listen for messages from popup/content scripts
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {

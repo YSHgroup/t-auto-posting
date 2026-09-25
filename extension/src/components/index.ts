@@ -1,6 +1,4 @@
-"""
-React components for extension
-"""
+// React components for extension
 // Sidebar Navigation Component
 export function Sidebar() {
   return (
